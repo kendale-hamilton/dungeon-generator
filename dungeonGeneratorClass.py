@@ -28,20 +28,6 @@ DOOR_COLOR = BLUE
 
 
 # Helper Functions / Objects
-def opposite(door) -> str:
-    # Returns the cardinal opposite of the inputted door direction
-    direction = door[2]
-    output = ''
-    if direction == 'N':
-        output = 'S'
-    elif direction == 'S':
-        output = 'N'
-    elif direction == 'E':
-        output = 'W'
-    elif direction == 'W':
-        output = 'E'
-    return output
-
 
 def log(message, key):
     # A function that will print the inputted debugging message if the key's debug type is set to true
@@ -127,23 +113,23 @@ class PygameDisplay:
         pygame.draw.rect(self.screen, ROOM_EDGE_COLOR, (real_x, real_y, room.w, room.h))
         pygame.draw.rect(self.screen, color, (real_x + 2, real_y + 2, room.w - 4, room.h - 4))
         # doors
-        for d in room.doors:
+        for door in room.doors:
             x_offset = 0
             y_offset = 0
-            if d[2] == 'N':
+            if door.d == 'N':
                 x_offset = -2
                 y_offset = 0
-            elif d[2] == 'S':
+            elif door.d == 'S':
                 x_offset = -2
                 y_offset = -4
-            elif d[2] == 'E':
+            elif door.d == 'E':
                 x_offset = -4
                 y_offset = -2
-            elif d[2] == 'W':
+            elif door.d == 'W':
                 x_offset = 0
                 y_offset = -2
 
-            pygame.draw.rect(self.screen, DOOR_COLOR, (real_x + d[0] + x_offset, real_y - d[1] + room.h + y_offset, 4, 4))
+            pygame.draw.rect(self.screen, DOOR_COLOR, (real_x + door.x + x_offset, real_y - door.y + room.h + y_offset, 4, 4))
         pygame.display.update()
 
     def add_line(self, point1: tuple, point2: tuple, color):
@@ -163,9 +149,35 @@ class PygameDisplay:
         print('BorderThickness: ' + str(self.borderThickness))
 
 
+class Door:
+    def __init__(self, relative_x, relative_y, direction):
+        self.x = relative_x
+        self.y = relative_y
+        self.d = direction
+
+    def __eq__(self, other):
+        if self.x == other.x and self.y == other.y and self.d == other.d:
+            return True
+
+    def __str__(self):
+        return f'({self.x}, {self.y}, {self.d})'
+
+    def opposite(self):
+        output = ''
+        if self.d == 'N':
+            output = 'S'
+        elif self.d == 'S':
+            output = 'N'
+        elif self.d == 'E':
+            output = 'W'
+        elif self.d == 'W':
+            output = 'E'
+        return output
+
+
 class Room:
     # Object representing dungeon rooms
-    def __init__(self, x, y, w, h, name, doors: list[tuple]=[]):
+    def __init__(self, x, y, w, h, name, doors: list[Door]=[]):
         self.x = x
         self.y = y
         self.w = w
@@ -188,49 +200,49 @@ class Room:
 
     def get_door(self, index):
         # Returns relative x, y and direction of the indexed door
-        x = self.x + self.doors[index][0]
-        y = self.y + self.doors[index][1]
-        d = self.doors[index][2]
-        return x, y, d
+        x = self.x + self.doors[index].x
+        y = self.y + self.doors[index].y
+        d = self.doors[index].d
+        return Door(x, y, d)
 
     def get_directions(self):
         # Returns a list of all door directions for the room
         output = []
-        for d in self.doors:
-            output.append(d[2])
+        for door in self.doors:
+            output.append(door.d)
         return output
 
     def get_door_by_d(self, d):
         # Returns the door that faces direction d
         entrance = None
         for door in self.doors:
-            if door[2] == d:
+            if door.d == d:
                 entrance = door
                 break
         return entrance
 
-    def test_distance(self, active_door, entrance, goal):
+    def test_distance(self, active_door: Door, entrance: Door, goal):
         # Returns the distance of the goal to the closest non-entrance door if the room were placed connected to the active door
         # (Only called on unplaced rooms)
         x_offset = 0
         y_offset = 0
-        if entrance[2] == 'N':
+        if entrance.d == 'N':
             y_offset = -1
-        elif entrance[2] == 'S':
+        elif entrance.d == 'S':
             y_offset = 1
-        elif entrance[2] == 'E':
+        elif entrance.d == 'E':
             x_offset = -1
-        elif entrance[2] == 'W':
+        elif entrance.d == 'W':
             x_offset = 1
 
-        test_x = active_door[0] - entrance[0] + x_offset
-        test_y = active_door[1] - entrance[1] + y_offset
+        test_x = active_door.x - entrance.x + x_offset
+        test_y = active_door.y - entrance.y + y_offset
 
         distances = []
         for door in self.doors:
             if door != entrance:
-                dtest_x = test_x + door[0]
-                dtest_y = test_y + door[1]
+                dtest_x = test_x + door.x
+                dtest_y = test_y + door.y
                 distances.append(math.sqrt((goal[0] - dtest_x) ** 2 + (goal[1] - dtest_y) ** 2))
 
         return max(distances)
@@ -242,28 +254,28 @@ class Room:
         for d in range(len(self.doors)):
             if d != self.entrance_i:
                 door = self.get_door(d)
-                dist = math.sqrt((goal[0] - door[0]) ** 2 + (goal[1] - door[1]) ** 2)
+                dist = math.sqrt((goal[0] - door.x) ** 2 + (goal[1] - door.y) ** 2)
                 if dist < best_distance:
                     best_distance = dist
                     best_door = self.get_door(d)
         return best_door
 
-    def place_room(self, active_door, entrance):
+    def place_room(self, active_door: Door, entrance):
         # Updates the room object to contain actual location data of the room
         # Doesn't draw
         x_offset = 0
         y_offset = 0
-        if active_door[2] == 'N':
+        if active_door.d == 'N':
             y_offset = 1
-        elif active_door[2] == 'S':
+        elif active_door.d == 'S':
             y_offset = -1
-        elif active_door[2] == 'E':
+        elif active_door.d == 'E':
             x_offset = 1
-        elif active_door[2] == 'W':
+        elif active_door.d == 'W':
             x_offset = -1
 
-        self.x = active_door[0] - entrance[0] + x_offset
-        self.y = active_door[1] - entrance[1] + y_offset
+        self.x = active_door.x - entrance.x + x_offset
+        self.y = active_door.y - entrance.y + y_offset
         self.entrance_i = self.doors.index(entrance)
         log('Room placed at ' + str(self.x) + ', ' + str(self.y), 'place room')
 
@@ -315,7 +327,7 @@ class Room:
 
         new_doors = []
         for door in self.doors:
-            new_doors.append((door[1], self.w - door[0], directions[directions.index(door[2]) + 1]))
+            new_doors.append(Door(door.y, self.w - door.x, directions[directions.index(door.d) + 1]))
 
         output = Room(0, 0, new_w, new_h, new_name, new_doors)
 
@@ -422,11 +434,11 @@ class DungeonGenerator:
             if len(self.path) >= PATH_LENGTH:
                 # Forces the only available room to be the finish if the path is at its desired length
                 available_rooms = [Room(0, 0, 20, 20, 'finish',
-                                        [(10, 0, 'S'), (10, 20, 'N'), (0, 10, 'W'), (20, 10, 'E')])]
+                                        [Door(10, 0, 'S'), Door(10, 20, 'N'), Door(0, 10, 'W'), Door(20, 10, 'E')])]
             else:
                 for room in prefabs:
                     directions = room.get_directions()
-                    if opposite(active_door) in directions:
+                    if active_door.opposite() in directions:
                         if active_room.name != room.name and active_room.name not in failed_rooms:
                             available_rooms.append(room)
 
@@ -436,7 +448,7 @@ class DungeonGenerator:
             next_room = None
             best_distance = 10000
             for room in available_rooms:
-                entrance = room.get_door_by_d(opposite(active_door))
+                entrance = room.get_door_by_d(active_door.opposite())
                 dist = room.test_distance(active_door, entrance, self.goal)
                 log(room.name + ': ' + str(dist), 'build dungeon')
                 if dist < best_distance:
@@ -451,7 +463,7 @@ class DungeonGenerator:
 
             # Turns prefab into an actual room
             copied_next = copy.deepcopy(next_room)
-            copied_next.place_room(active_door, copied_next.get_door_by_d(opposite(active_door)))
+            copied_next.place_room(active_door, copied_next.get_door_by_d(active_door.opposite()))
 
             # Gets best door (chance to get random door based on DOOR_RANDOM)
             next_door = copied_next.get_best_door(self.goal)
@@ -529,25 +541,25 @@ class DungeonGenerator:
         # Prints the list of (room, door)
         print('Path:')
         for room, door in self.path:
-            print((room.name, room.x, room.y, door))
+            print((room.name, room.x, room.y, str(door)))
 
 
 # Prefabs
 prefabs = [
-    Room(0, 0, 60, 60, 'big square', [(30, 0, 'S'), (30, 60, 'N'), (0, 30, 'W'), (60, 30, 'E')]),
-    Room(0, 0, 10, 50, 'long hall', [(5, 0, 'S'), (5, 50, 'N')]),
-    Room(0, 0, 30, 40, 't shaped', [(15, 0, 'S'), (0, 35, 'W'), (30, 35, 'E')]),
-    Room(0, 0, 50, 20, 'u turn', [(10, 0, 'S'), (40, 0, 'S')]),
-    Room(0, 0, 30, 30, 'left turn', [(15, 0, 'S'), (0, 15, 'W')]),
-    Room(0, 0, 30, 30, 'right turn', [(15, 0, 'S'), (30, 15, 'E')]),
-    Room(0, 0, 20, 20, 'small square', [(10, 0, 'S'), (10, 20, 'N'), (0, 10, 'W'), (20, 10, 'E')]),
-    Room(0, 0, 30, 40, 'upside down t', [(15, 40, 'N'), (0, 35, 'W'), (30, 35, 'E')])
+    Room(0, 0, 60, 60, 'big square', [Door(30, 0, 'S'), Door(30, 60, 'N'), Door(0, 30, 'W'), Door(60, 30, 'E')]),
+    Room(0, 0, 10, 50, 'long hall', [Door(5, 0, 'S'), Door(5, 50, 'N')]),
+    Room(0, 0, 30, 40, 't shaped', [Door(15, 0, 'S'), Door(0, 35, 'W'), Door(30, 35, 'E')]),
+    Room(0, 0, 50, 20, 'u turn', [Door(10, 0, 'S'), Door(40, 0, 'S')]),
+    Room(0, 0, 30, 30, 'left turn', [Door(15, 0, 'S'), Door(0, 15, 'W')]),
+    Room(0, 0, 30, 30, 'right turn', [Door(15, 0, 'S'), Door(30, 15, 'E')]),
+    Room(0, 0, 20, 20, 'small square', [Door(10, 0, 'S'), Door(10, 20, 'N'), Door(0, 10, 'W'), Door(20, 10, 'E')]),
+    Room(0, 0, 30, 40, 'upside down t', [Door(15, 40, 'N'), Door(0, 35, 'W'), Door(30, 35, 'E')])
 ]
 
 
 # Main
 window = PygameDisplay(500, 500, 10, BLACK, WHITE)
-start = Room(230, 0, 20, 10, 'start', [(10, 10, 'N')])
+start = Room(230, 0, 20, 10, 'start', [Door(10, 10, 'N')])
 g = DungeonGenerator(start, 500, 500, prefabs)
 g.add_rotated_prefabs()
 # g.show_prefabs(window)

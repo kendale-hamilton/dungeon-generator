@@ -1,3 +1,4 @@
+- Add placed room checking for functions / inheritance heirarchy
 - Create a door object rather than tuples
 - Fix 1 pixel gap based on offsets in place_room and == checks in overlaps
 - Add type annotations
