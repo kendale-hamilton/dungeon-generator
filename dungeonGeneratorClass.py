@@ -51,7 +51,7 @@ def log(message, key):
         'add line': False,
         'place room': False,
         'generate finish': False,
-        'overlap': False,
+        'overlap': True,
         'build dungeon': False,
         'rotated prefabs': False,
         'random door': False,
@@ -273,8 +273,8 @@ class Room:
         corners = [
             (self.x, self.y),
             (self.x, self.y + self.h),
-            (self.x + self.w, self.y),
-            (self.x + self.w, self.y + self.h)
+            (self.x + self.w, self.y + self.h),
+            (self.x + self.w, self.y)
         ]
 
         edges = []
@@ -382,7 +382,7 @@ class DungeonGenerator:
 
     def overlaps(self, test_room):
         # Returns true if an unplaced test_room would overlap with any existing room or grid edges
-        if not 0 <= test_room.x <= self.grid_w or not 0 <= test_room.y <= self.grid_h:
+        if not 0 <= test_room.x <= self.grid_w - test_room.w or not 0 <= test_room.y <= self.grid_h - test_room.h:
             return True
 
         test_edges = test_room.get_edges()
@@ -486,7 +486,7 @@ class DungeonGenerator:
                     log('Too many fails. Popping ' + popped.name, 'build dungeon')
                     failed_rooms = [popped.name]
 
-            self.print_path()
+            #self.print_path()
 
         # Calculates the amount of time the generator took
         # Used to verify no excessive looping
@@ -523,6 +523,7 @@ class DungeonGenerator:
             pygame.display.update()
             time.sleep(room_sleep)
         window.on(end_sleep)
+        self.print_path()
 
     def print_path(self):
         # Prints the list of (room, door)
