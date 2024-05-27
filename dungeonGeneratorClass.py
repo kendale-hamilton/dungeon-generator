@@ -5,10 +5,14 @@ import math
 import copy
 import time
 
-# Constant Parameters
+# Dungeon Generator Parameters
 FINISH_THRESH = .3
 ROOM_RANDOM = .7
 DOOR_RANDOM = .75
+PATH_LENGTH = 15
+ALLOWED_FAILS = 3
+
+# Global Colors
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
@@ -19,9 +23,13 @@ YELLOW = (249, 252, 28)
 GRAY = (105, 101, 100)
 PINK = (252, 3, 223)
 
-# Helper Functions / Objects
+ROOM_EDGE_COLOR = ORANGE
+DOOR_COLOR = BLUE
 
+
+# Helper Functions / Objects
 def opposite(door) -> str:
+    # Returns the cardinal opposite of the inputted door direction
     direction = door[2]
     output = ''
     if direction == 'N':
@@ -36,6 +44,7 @@ def opposite(door) -> str:
 
 
 def log(message, key):
+    # A function that will print the inputted debugging message if the key's debug type is set to true
     types: dict = {
         'converting': False,
         'add room': False,
@@ -55,6 +64,7 @@ def log(message, key):
 
 
 class PygameDisplay:
+    # A bordered pygame window with (0, 0) in bottom left rather than top left (pygame default)
     def __init__(self, innerWidth, innerHeight, borderThickness, backgroundColor, borderColor):
         self.innerWidth = innerWidth
         self.innerHeight = innerHeight
@@ -72,6 +82,7 @@ class PygameDisplay:
                                                         self.windowHeight - 2 * self.borderThickness))
 
     def reset(self):
+        # Reinitialized the pygame window for successive use
         self.screen.fill(self.borderColor)
         pygame.draw.rect(self.screen, self.backgroundColor, (self.borderThickness, self.borderThickness,
                                                         self.windowWidth - 2 * self.borderThickness,
@@ -79,6 +90,7 @@ class PygameDisplay:
         pygame.display.update()
 
     def real(self, point, y_offset=0):
+        # Converts ordered pair from bottom-left-origin (input) to top-left-origin (for pygame built-in functions)
         x = point[0]
         y = point[1]
         log('Converting ' + str(x) + ', ' + str(y), 'converting')
@@ -87,6 +99,7 @@ class PygameDisplay:
         return real_x, real_y
 
     def on(self, seconds=100000):
+        # Displays the pygame window for a specified amount of time
         start_time = time.time()
         time_dif = 0
         while time_dif <= seconds:
@@ -103,6 +116,7 @@ class PygameDisplay:
             pygame.display.update()
 
     def add_room(self, room, color):
+        # Draws a colored rectangle on pygame window, with smaller rectangles at the relative door locations
         log(room.name, 'add room')
         log('room_x: ' + str(room.x), 'add room')
         log('room_y: ' + str(room.y), 'add room')
@@ -110,7 +124,7 @@ class PygameDisplay:
         log('real_x: ' + str(real_x), 'add room')
         log('real_y: ' + str(real_y), 'add room')
 
-        pygame.draw.rect(self.screen, ORANGE, (real_x, real_y, room.w, room.h))
+        pygame.draw.rect(self.screen, ROOM_EDGE_COLOR, (real_x, real_y, room.w, room.h))
         pygame.draw.rect(self.screen, color, (real_x + 2, real_y + 2, room.w - 4, room.h - 4))
         # doors
         for d in room.doors:
@@ -129,10 +143,11 @@ class PygameDisplay:
                 x_offset = 0
                 y_offset = -2
 
-            pygame.draw.rect(self.screen, BLUE, (real_x + d[0] + x_offset, real_y - d[1] + room.h + y_offset, 4, 4))
+            pygame.draw.rect(self.screen, DOOR_COLOR, (real_x + d[0] + x_offset, real_y - d[1] + room.h + y_offset, 4, 4))
         pygame.display.update()
 
     def add_line(self, point1: tuple, point2: tuple, color):
+        # Draws a colored line on the pygame window
         real1 = self.real(point1)
         real2 = self.real(point2)
         log('Line Start: ' + str(point1), 'add line')
@@ -140,6 +155,7 @@ class PygameDisplay:
         pygame.draw.line(self.screen, color, real1, real2, 2)
 
     def print(self):
+        # Prints details of the pygame window to console
         print('InnerWidth: ' + str(self.innerWidth))
         print('InnerHeight: ' + str(self.innerHeight))
         print('WindowWidth: ' + str(self.windowWidth))
@@ -148,6 +164,7 @@ class PygameDisplay:
 
 
 class Room:
+    # Object representing dungeon rooms
     def __init__(self, x, y, w, h, name, doors: list[tuple]=[]):
         self.x = x
         self.y = y
@@ -170,26 +187,31 @@ class Room:
             return False
 
     def get_door(self, index):
+        # Returns relative x, y and direction of the indexed door
         x = self.x + self.doors[index][0]
         y = self.y + self.doors[index][1]
         d = self.doors[index][2]
         return x, y, d
 
     def get_directions(self):
+        # Returns a list of all door directions for the room
         output = []
         for d in self.doors:
             output.append(d[2])
         return output
 
-    def get_entrance(self, entrance_d):
+    def get_door_by_d(self, d):
+        # Returns the door that faces direction d
         entrance = None
         for door in self.doors:
-            if door[2] == entrance_d:
+            if door[2] == d:
                 entrance = door
                 break
         return entrance
 
     def test_distance(self, active_door, entrance, goal):
+        # Returns the distance of the goal to the closest non-entrance door if the room were placed connected to the active door
+        # (Only called on unplaced rooms)
         x_offset = 0
         y_offset = 0
         if entrance[2] == 'N':
@@ -214,6 +236,7 @@ class Room:
         return max(distances)
 
     def get_best_door(self, goal):
+        # Returns the non-entrance door that is closest to the goal
         best_distance = 10000
         best_door = None
         for d in range(len(self.doors)):
@@ -226,7 +249,8 @@ class Room:
         return best_door
 
     def place_room(self, active_door, entrance):
-        #   Offset appears to not be needed
+        # Updates the room object to contain actual location data of the room
+        # Doesn't draw
         x_offset = 0
         y_offset = 0
         if active_door[2] == 'N':
@@ -244,6 +268,8 @@ class Room:
         log('Room placed at ' + str(self.x) + ', ' + str(self.y), 'place room')
 
     def get_edges(self):
+        # Returns a list of dicts, with the slope (0 or inf), the x/y value (depends on slope) and the endpoints
+        # for each edge of the room
         corners = [
             (self.x, self.y),
             (self.x, self.y + self.h),
@@ -279,6 +305,8 @@ class Room:
         return edges
 
     def get_rotated(self, degree):
+        # Returns a copy of the room that has been rotated degree degrees
+        # Only called on unplaced rooms
         directions = ['N', 'E', 'S', 'W', 'N']
 
         new_w = self.h
@@ -299,6 +327,7 @@ class Room:
 
 
 class DungeonGenerator:
+    # Class that contains functions to generate a list of (room, active_door) that represents the dungeon
     def __init__(self, start: Room, grid_w, grid_h, prefabs):
         self.start: Room = start
         self.goal = None
@@ -308,6 +337,8 @@ class DungeonGenerator:
         self.path = [(start, start.get_door(0))]
 
     def generate_goal(self):
+        # Randomly picks a point in the grid to be the goal which the dungeon builds towards
+        # Minimum distance from start determined by FINISH_THRESH global
         valid = False
         while not valid:
             x = random.randint(0, self.grid_w - 10)
@@ -322,7 +353,8 @@ class DungeonGenerator:
         self.goal = (x, y)
         log('Goal: ' + str(self.goal), 'generate finish')
 
-    def show_prefabs(self, window):
+    def show_prefabs(self, window: PygameDisplay):
+        # Draws the generators prefabs on the Pygame window
         x = 10
         y = 10
         for room in self.prefabs:
@@ -336,6 +368,7 @@ class DungeonGenerator:
                 x += 100
 
     def add_rotated_prefabs(self):
+        # Adds all rotated versions of the prefabs (no duplicates) to the prefabs
         full_prefabs = self.prefabs
 
         for room in self.prefabs:
@@ -348,6 +381,7 @@ class DungeonGenerator:
         self.prefabs = full_prefabs
 
     def overlaps(self, test_room):
+        # Returns true if an unplaced test_room would overlap with any existing room or grid edges
         if not 0 <= test_room.x <= self.grid_w or not 0 <= test_room.y <= self.grid_h:
             return True
 
@@ -373,18 +407,20 @@ class DungeonGenerator:
         return False
 
     def build_dungeon(self):
+        # Main logic for generating dungeon
         start_time = time.time()
         self.generate_goal()
         failed_rooms = []
         while self.path[-1][0].name != 'finish':
+            # Loops until the last room in the path is the finish
             active_room = self.path[-1][0]
             active_door = self.path[-1][1]
             log('Active room: ' + active_room.name, 'build dungeon')
 
-            # Gets rooms with a door in the correct direction
+            # Creates list of rooms with a door opposite/that could connect to the active_door
             available_rooms = []
-
-            if len(self.path) >= 15:
+            if len(self.path) >= PATH_LENGTH:
+                # Forces the only available room to be the finish if the path is at its desired length
                 available_rooms = [Room(0, 0, 20, 20, 'finish',
                                         [(10, 0, 'S'), (10, 20, 'N'), (0, 10, 'W'), (20, 10, 'E')])]
             else:
@@ -395,11 +431,12 @@ class DungeonGenerator:
                             available_rooms.append(room)
 
             log('Available Rooms: ' + str(available_rooms), 'False')
-            # Gets room with door closest to goal (chance to pick a random room)
+
+            # Gets the room with the door closest to goal (chance to pick a random room based on ROOM_RANDOM)
             next_room = None
             best_distance = 10000
             for room in available_rooms:
-                entrance = room.get_entrance(opposite(active_door))
+                entrance = room.get_door_by_d(opposite(active_door))
                 dist = room.test_distance(active_door, entrance, self.goal)
                 log(room.name + ': ' + str(dist), 'build dungeon')
                 if dist < best_distance:
@@ -414,9 +451,9 @@ class DungeonGenerator:
 
             # Turns prefab into an actual room
             copied_next = copy.deepcopy(next_room)
-            copied_next.place_room(active_door, copied_next.get_entrance(opposite(active_door)))
+            copied_next.place_room(active_door, copied_next.get_door_by_d(opposite(active_door)))
 
-            # Gets best door (chance to get random door, but not working)
+            # Gets best door (chance to get random door based on DOOR_RANDOM)
             next_door = copied_next.get_best_door(self.goal)
 
             #   This part doesn't work yet
@@ -434,41 +471,48 @@ class DungeonGenerator:
             log('Next door: ' + str(next_door), 'build dungeon')
 
             if not self.overlaps(copied_next):
+                # Adds room to path and resets the failure count/list
                 self.path.append((copied_next, next_door))
                 log('Added ' + str((copied_next.name, next_door)) + ' to path', 'build dungeon')
-                active_room = copied_next
-                active_door = next_door
                 failed_rooms = []
             else:
+                # Adds room to the failure list and tries again with a room not in the list
                 log('Room overlapped. Trying again...', 'build dungeon')
                 failed_rooms.append(copied_next.name)
-                if len(failed_rooms) < 3:
+                if len(failed_rooms) < ALLOWED_FAILS:
+                    # Removes the last room added to path and prevents that room from being chosen again if fail count
+                    # exceeds ALLOWED_FAILS to prevent a path where no rooms can be placed
                     popped, door = self.path.pop(len(self.path) - 1)
                     log('Too many fails. Popping ' + popped.name, 'build dungeon')
                     failed_rooms = [popped.name]
 
+            self.print_path()
 
-            #self.print_path()
-
+        # Calculates the amount of time the generator took
+        # Used to verify no excessive looping
         end_time = time.time()
         return end_time - start_time
 
     def new_dungeon(self):
+        # Clears dungeon information and creates a new dungeon with the same generator
         self.path = [(start, start.get_door(0))]
         self.build_dungeon()
 
-    def draw(self, window: PygameDisplay):
+    def draw(self, window: PygameDisplay, end_sleep=100000):
+        # Turns on Pygame window displaying the full dungeon for end_sleep seconds
         window.add_room(self.start, GREEN)
         for room, door in self.path:
             if room.name != 'start' and room.name != 'finish':
                 window.add_room(room, YELLOW)
             elif room.name == 'finish':
                 window.add_room(room, RED)
+        # Optional line showing optimal path from start to goal
         #window.add_line(self.start.get_door(0), finish_center, YELLOW)
         window.add_room(Room(self.goal[0], self.goal[1], 10, 10, 'goal'), PINK)
-        window.on()
+        window.on(end_sleep)
 
     def draw_by_room(self, window: PygameDisplay, room_sleep, end_sleep=100000):
+        # Turns on Pygame display and draws rooms in dungeon one at a time, with room_sleep seconds between each room
         for room, door in self.path:
             color = YELLOW
             if room.name == 'start':
@@ -481,6 +525,7 @@ class DungeonGenerator:
         window.on(end_sleep)
 
     def print_path(self):
+        # Prints the list of (room, door)
         print('Path:')
         for room, door in self.path:
             print((room.name, room.x, room.y, door))

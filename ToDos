@@ -1,0 +1,7 @@
+- Add checking to make sure certain functions aren't called on unplaced rooms /or/ Create a class hierarchy
+- Create a door object rather than tuples
+- Fix 1 pixel gap based on offsets in place_room and == checks in overlaps
+- Add type annotations
+- Fix occasional wall overlap
+- Fix RANDOM_DOOR failure
+- Consider renaming overlaps
